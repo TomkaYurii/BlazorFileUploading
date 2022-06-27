@@ -1,0 +1,73 @@
+﻿@page "/"
+
+@using System.IO;
+@using Tewr.Blazor.FileReader;
+
+@inject IFileReaderService fileReadrer;
+@inject IHttpClientFactory ClientFactory
+
+<input type = "file" @ref = "elementReference" @onchange="async () => await OpenFileAsync()" />
+<ul>
+    <li>File Name: @fileName</li>
+    <li>Size: @size</li>
+    <li>Type: @type</li>
+</ul>
+
+<br/>
+
+<button class="dtn btn-block btn-success" @onclick="async()=> await UploadFileAsync()">Upload File</button>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="alert alert-pri">
+        Upload Succesfully
+    </div>
+}
+
+@if (imagePath != null)
+{
+    <img style="width:150px" src="@imagePath"/>
+}
+
+@code{
+    ElementReference elementReference;
+    string message = string.Empty;
+    string imagePath = null;
+
+    string fileName = string.Empty;
+    string type = string.Empty;
+    string size = string.Empty;
+
+    Stream fileStream = null;
+
+    async Task OpenFileAsync()
+    {
+        var file = (await fileReadrer.CreateReference(elementReference).EnumerateFilesAsync()).FirstOrDefault();
+        if (file == null) return;
+
+        var fileInfo = await file.ReadFileInfoAsync();
+        fileName = fileInfo.Name;
+        size = $"{fileInfo.Size}b";
+        type = fileInfo.Type;
+
+        using (var memoryStream = await file.CreateMemoryStreamAsync((int) fileInfo.Size))
+        {
+            fileStream = new MemoryStream(memoryStream.ToArray());
+        }
+    }
+
+    async Task UploadFileAsync()
+    {
+        string url = "https://localhost:5001";
+        var content = new MultipartFormDataContent();
+
+        content.Headers.ContentDisposition = new System.Net.Http.Headers.ContentDispositionHeaderValue("form-data");
+        content.Add(new StreamContent(fileStream, (int)fileStream.Length), "image", fileName);
+
+        var client = ClientFactory.CreateClient();
+        var responce = await client.PostAsync($"{url}/api/FileUploads",content);
+        message = "Upload Success";
+
+
+    }
+}
